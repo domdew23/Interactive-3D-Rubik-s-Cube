@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Rubik's Cube</title>
+
+		<script src="gl-matrix.js"></script>
+		<script src="verts.js"></script>
+		<script src="Test.js"></script>
+		<script src="app.js"></script>
+
+		<script id="vertex_shader" type="x-shader/x-vertex">
+			precision mediump float;
+
+			attribute vec3 vertPosition;
+			attribute vec3 vertColor;
+			varying vec3 fragColor;
+			uniform mat4 mWorld;
+			uniform mat4 mView;
+			uniform mat4 mProj;
+
+			void main(){
+				fragColor = vertColor;
+				gl_Position = mProj * mView * mWorld * vec4(vertPosition, 1.0);
+			}
+		</script>
+
+		<script id="fragment_shader" type="x-shader/x-fragment">
+			precision mediump float;
+
+			varying vec3 fragColor;
+
+			void main() {
+				gl_FragColor = vec4(fragColor, 1.0);
+			}
+
+		</script>
+		
+	</head>
+	<body>
+		<canvas id="web_gl_canvas" width="800px" height="800px">
+			Your browser does not support HTML 5.
+		</canvas>
+	</body>
+</html>
