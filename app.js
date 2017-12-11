@@ -1,10 +1,15 @@
 var state = {
-	items: 0,
+	rubiksCube: null,
 	buffers : {
 		cubeVertexBuffer: null,
+		cubeNormalsBuffer: null,
 		cubeFacesBuffer: null,
 		stickerVertexBuffer: null,
+		stickerNormalsBuffer: null,
 		stickerFacesBuffer: null,
+		innerCubeVertexBuffer: null,
+		innerCubeNormalsBuffer: null,
+		innerCubeFacesBuffer: null,
 	},
 	ui : {
 		dragging: false,
@@ -15,22 +20,25 @@ var state = {
 		pressedKeys: {},
 	},
 	animation: {},
-	app: {
-		theta: {
-			x: 0,
-			y: 0,
-		},
-		eye: {
-			x: 0.,
-			y: 0.,
-			z: -6.,
-		},
-		objects: [],
-	}
+	theta: {
+		x: 0,
+		y: 0,
+	},
+	eye: [0, 0, -15],
+	center: [0, 0, 0],
+	up: [0, 1, 0],
+	objects: [],
+	FOV: -45,
+	stickerDepth: .96,
 };
 
 var gl;
 var canvas;
+var program;
+var viewMatrix;
+var projMatrix;
+var worldMatrix;
+var rotationMatrix;
 
 window.onload = function main(){
 	run();
@@ -43,17 +51,27 @@ function run(){
 	canvas.onmousemove = mousemove;
 	document.onkeydown = keydown;
 	document.onkeyup = keyup;
+	viewMatrix = mat4.create();
+	projMatrix = mat4.create();
+	worldMatrix = mat4.create();
+	rotationMatrix = mat4.create();
 
 	gl = init();
-	var program = linkProgram(loadVertexShader(), loadFragShader());
+	linkProgram(loadVertexShader(), loadFragShader());
 	gl.useProgram(program);
+	state.rubiksCube = new RubiksCube();
 
-	var vertices = getVerts();
-	var indices = getIndices();
-	state.items = (vertices.length/3);
-	createBuffer(vertices, indices, program);
+	if (gl){
+		gl.clearColor(0.5, 0.5, 0.8, 1.0);
+		gl.enable(gl.DEPTH_TEST);
+		gl.depthFunc(gl.LEQUAL);
+		gl.enable(gl.CULL_FACE);
+		gl.frontFace(gl.CCW);
+		gl.cullFace(gl.BACK);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		tick();
+	}
 }
-
 
 function init(){	
 	try {
@@ -96,22 +114,26 @@ function loadFragShader(){
 
 function linkProgram(vertexShader, fragmentShader){
 	// Put vertex and fragment shaders together into complete program
-	var program = gl.createProgram();
+	program = gl.createProgram();
 	gl.attachShader(program, vertexShader);
 	gl.attachShader(program, fragmentShader);
 	gl.linkProgram(program);
-	
+	gl.useProgram(program);
+
+	program.vertexPosition = gl.getAttribLocation(program, 'vertPosition');
+	gl.enableVertexAttribArray(program.vertexPosition);
+
+	program.vertNormal = gl.getAttribLocation(program, 'vertNormal');
+	gl.enableVertexAttribArray(program.vertNormal);
+
+	program.ambient = gl.getUniformLocation(program, 'ambient');
+
 	// make sure program was created correctly
 	if (!gl.getProgramParameter(program, gl.LINK_STATUS)){
 		throw new Error(gl.getProgramInfoLog(program));
 	}
 
 	gl.viewport(0, 0, canvas.width, canvas.height);
-	gl.enable(gl.DEPTH_TEST);
-	gl.enable(gl.CULL_FACE);
-	gl.frontFace(gl.CCW);
-	gl.cullFace(gl.BACK);
-	return program;
 }
 
 function createBuffer(vertices, indices, program){
@@ -174,8 +196,8 @@ function createBuffer(vertices, indices, program){
 	
 	var loop = function() {
 		updateState();
-		mat4.rotate(yRoatation, identityMatrix, state.app.theta.y/1000, [0, 1, 0]);
-		mat4.rotate(xRoatation, identityMatrix, state.app.theta.x/1000, [1, 0, 0]);
+		mat4.rotate(yRoatation, identityMatrix, state.theta.y/1000, [0, 1, 0]);
+		mat4.rotate(xRoatation, identityMatrix, state.theta.x/1000, [1, 0, 0]);
 		mat4.mul(worldMatrix, xRoatation, yRoatation);
 		
 		gl.uniformMatrix4fv(matWorldUniformLocation, gl.FALSE, worldMatrix);
@@ -194,6 +216,10 @@ function createCubeBuffer() {
 	gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.cubeVertexBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(getCubeVerts()), gl.STATIC_DRAW);
 
+	state.buffers.cubeNormalsBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.cubeNormalsBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(getCubeNormals()), gl.STATIC_DRAW);
+
 	state.buffers.cubeFacesBuffer = gl.createBuffer();
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, state.buffers.cubeFacesBuffer);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(getCubeFaces()), gl.STATIC_DRAW);
@@ -204,9 +230,57 @@ function createStickerBuffer(){
 	gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.stickerVertexBuffer);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(getStickerVerts()), gl.STATIC_DRAW);
 
+	state.buffers.stickerNormalsBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.stickerNormalsBuffer);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(getStickerNormals()), gl.STATIC_DRAW);
+
 	state.buffers.stickerFacesBuffer = gl.createBuffer();
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, state.buffers.stickerFacesBuffer);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(getStickerFaces()), gl.STATIC_DRAW);
+}
+
+function createInnerCubeBuffer() {
+        state.buffers.innerCubeVertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.innerCubeVertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(getInnerCubeVertices()), gl.STATIC_DRAW);
+
+        state.buffers.innerCubeNormalsBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.innerCubeNormalsBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(getInnerCubeNormals()), gl.STATIC_DRAW);
+
+        state.buffers.innerCubeFacesBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, state.buffers.innerCubeFacesBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(getInnerCubeFaces()), gl.STATIC_DRAW);
+}
+
+function tick(){
+	requestAnimationFrame(tick);
+	drawScene();
+}
+
+function drawScene(){
+	state.rubiksCube.drawToFrameBuffer();
+	//state.rubiksCube.drawInnerCube();
+	state.rubiksCube.draw();
+
+	var yRoatation = new Float32Array(16);
+	var xRoatation = new Float32Array(16);
+	var identityMatrix = new Float32Array(16);
+	mat4.identity(identityMatrix);
+
+	mat4.rotate(yRoatation, identityMatrix, state.theta.y/1000, [0, 1, 0]);
+	mat4.rotate(xRoatation, identityMatrix, state.theta.x/1000, [1, 0, 0]);
+	mat4.mul(worldMatrix, xRoatation, yRoatation);
+}
+
+function setMatrixUniforms() {
+	var matWorldUniformLocation = gl.getUniformLocation(program, 'mWorld');
+	var matViewUniformLocation = gl.getUniformLocation(program, 'mView');
+	var matProjUniformLocation = gl.getUniformLocation(program, 'mProj');
+
+	gl.uniformMatrix4fv(matWorldUniformLocation, gl.FALSE, worldMatrix);
+	gl.uniformMatrix4fv(matViewUniformLocation, gl.FALSE, viewMatrix);
+	gl.uniformMatrix4fv(matProjUniformLocation, gl.FALSE, projMatrix);
 }
 
 function updateState(){
@@ -254,11 +328,17 @@ function mousemove(event){
 		var dx = factor * (x - state.ui.mouse.lastX);
 		var dy = factor * (y - state.ui.mouse.lastY);
 
-		state.app.theta.x += dy;
-		state.app.theta.y += dx;
+		state.theta.x += dy;
+		state.theta.y += dx;
 	}
 	state.ui.mouse.lastX = x;
 	state.ui.mouse.lastY = y;
 }
 
+function getAmbient(){
+	return [1.0, 1.0, 1.0, 1.0];
+}
 
+function degreesToRadians(degrees) {
+    return degrees * Math.PI / 180;
+}

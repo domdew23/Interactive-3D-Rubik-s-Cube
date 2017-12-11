@@ -5,22 +5,32 @@
 
 		<script src="gl-matrix.js"></script>
 		<script src="verts.js"></script>
-		<script src="Test.js"></script>
+		<script src="RubiksCube.js"></script>
+		<script src="InnerCube.js"></script>
+		<script src="Cube.js"></script>
+		<script src="Sticker.js"></script>
 		<script src="app.js"></script>
 
 		<script id="vertex_shader" type="x-shader/x-vertex">
 			precision mediump float;
 
 			attribute vec3 vertPosition;
+			attribute vec3 vertNormal;
+
 			attribute vec3 vertColor;
 			varying vec3 fragColor;
+
 			uniform mat4 mWorld;
 			uniform mat4 mView;
 			uniform mat4 mProj;
 
+			varying vec4 position;
+			varying vec3 normal;
+
 			void main(){
-				fragColor = vertColor;
+				position = mView * vec4(vertPosition, 1.0);
 				gl_Position = mProj * mView * mWorld * vec4(vertPosition, 1.0);
+				normal = normalize(vertNormal);
 			}
 		</script>
 
@@ -28,9 +38,10 @@
 			precision mediump float;
 
 			varying vec3 fragColor;
+			uniform highp vec4 ambient;
 
 			void main() {
-				gl_FragColor = vec4(fragColor, 1.0);
+				gl_FragColor = ambient;
 			}
 
 		</script>
