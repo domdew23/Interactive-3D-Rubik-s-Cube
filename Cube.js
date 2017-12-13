@@ -15,7 +15,7 @@ function Cube(rubiksCube, coordinates, color){
         'yellow': [1.0, 1.0, 0.0, 1.0]
     }
 
-    this.transform = function(){
+    this.rotate = function(){
     	mat4.multiply(viewMatrix, viewMatrix, this.rotationMatrix);
     	mat4.translate(viewMatrix, viewMatrix, this.translationVector);
     }
@@ -32,13 +32,13 @@ function Cube(rubiksCube, coordinates, color){
     	
     	if (x == -1){
     		this.stickers.push(new Sticker(this, this.COLORS['red'], function() {
-    			this.cube.transform();
+    			this.cube.rotate();
     			mat4.translate(viewMatrix, viewMatrix, [-state.stickerDepth, 0, 0]);
     			mat4.rotateZ(viewMatrix, viewMatrix, degreesToRadians(90));
     		}));
     	} else if (x == 1){
     		this.stickers.push(new Sticker(this, this.COLORS['orange'], function(){
-    			this.cube.transform();
+    			this.cube.rotate();
     			mat4.translate(viewMatrix, viewMatrix, [state.stickerDepth, 0, 0]);
     			mat4.rotateZ(viewMatrix, viewMatrix, degreesToRadians(-90));
     		}));
@@ -46,29 +46,29 @@ function Cube(rubiksCube, coordinates, color){
 
     	if (y == -1){
     		this.stickers.push(new Sticker(this, this.COLORS['yellow'], function() {
-    			this.cube.transform();
+    			this.cube.rotate();
     			mat4.translate(viewMatrix, viewMatrix, [0, -state.stickerDepth, 0]);
     			mat4.rotateX(viewMatrix, viewMatrix, degreesToRadians(-180));
     		}));
     	} else if (y == 1){
     		this.stickers.push(new Sticker(this, this.COLORS['white'], function(){
-    			this.cube.transform();
+    			this.cube.rotate();
     			mat4.translate(viewMatrix, viewMatrix, [0, state.stickerDepth, 0]);
-    			setMatrixUniforms();
+    			setUniforms();
     		}));
     	}
 
     	if (z == -1){
     		this.stickers.push(new Sticker(this, this.COLORS['blue'], function(){
-    			this.cube.transform();
+    			this.cube.rotate();
     			mat4.translate(viewMatrix, viewMatrix, [0, 0, -state.stickerDepth]);
     			mat4.rotateX(viewMatrix, viewMatrix, degreesToRadians(-90));
     		}));
     	} else if (z == 1){
     		this.stickers.push(new Sticker(this, this.COLORS['green'], function() {
-    			this.cube.transform();
+    			this.cube.rotate();
     			mat4.translate(viewMatrix, viewMatrix, [0, 0, state.stickerDepth]);
-    			mat4.rotateX(viewMatrix, viewMatrix, degreesToRadians(-90));
+    			mat4.rotateX(viewMatrix, viewMatrix, degreesToRadians(90));
     		}));
     	}
     }
@@ -76,10 +76,9 @@ function Cube(rubiksCube, coordinates, color){
 	this.draw = function(color) {
         var mvMatrix = mat4.create();
         mat4.copy(mvMatrix, viewMatrix);
-        this.transform();
-        setMatrixUniforms();
-
-        gl.uniform4fv(program.ambient, color);
+        this.rotate();
+        setUniforms();
+        setLighting(color);
     
         gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.cubeVertexBuffer);
         gl.vertexAttribPointer(program.vertexPosition, 3, gl.FLOAT, false, 0, 0);

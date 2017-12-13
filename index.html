@@ -25,12 +25,23 @@
 			uniform mat4 mProj;
 
 			varying vec4 position;
-			varying vec3 normal;
+			varying vec3 normal, surfaceLight, surfaceCam;
+
+			uniform float shininess;
+			uniform vec4 ambient, diffuse, specular;
 
 			void main(){
 				position = mView * vec4(vertPosition, 1.0);
 				gl_Position = mProj * mView * mWorld * vec4(vertPosition, 1.0);
-				normal = normalize(vertNormal);
+
+				vec3 pos = -(mView * position).xyz;
+				vec3 lightPos = vec3(0, 0, -1);
+				vec3 light = vec3(1, 1, 1);
+
+				surfaceLight = normalize(light - pos);
+			    surfaceCam = normalize(-pos);
+
+				normal = normalize(vertNormal.xyz);
 			}
 		</script>
 
@@ -38,10 +49,31 @@
 			precision mediump float;
 
 			varying vec3 fragColor;
-			uniform highp vec4 ambient;
+			uniform float shininess;
+			uniform vec4 ambient, diffuse, specular;
+	 		
+	 		varying vec3 normal, surfaceLight, surfaceCam;
 
 			void main() {
-				gl_FragColor = ambient;
+				vec4 fragColor;
+
+				vec3 H = normalize(surfaceLight + surfaceCam);
+				vec3 R = normalize(reflect(-surfaceLight, normal));
+
+				float Kd = max(dot(surfaceLight, normal), 0.0);
+			    vec4 diffuseProduct = Kd*diffuse;
+
+			    float Ks = pow(max(dot(surfaceCam, R), 0.0), shininess);
+			    vec4 specularProduct = Ks * specular;
+			    
+			    if(dot(surfaceLight, normal) < 0.0) {
+					specularProduct = vec4(0.0, 0.0, 0.0, 1.0);
+			    }
+
+			    fragColor = ambient + diffuseProduct + specularProduct;
+			    fragColor.a = 1.0;
+
+				gl_FragColor = fragColor;
 			}
 
 		</script>
@@ -51,5 +83,6 @@
 		<canvas id="web_gl_canvas" width="800px" height="800px">
 			Your browser does not support HTML 5.
 		</canvas>
+		<input type="button" id=button value="Press to Scramble" onClick = "scrambleCube()"><br>
 	</body>
 </html>

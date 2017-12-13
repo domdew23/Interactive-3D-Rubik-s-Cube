@@ -30,8 +30,9 @@ function InnerCube(){
         var mvMatrix = mat4.create();
         mat4.copy(mvMatrix, viewMatrix);
         mat4.scale(viewMatrix, viewMatrix, [3, 3, 3]);
-        setMatrixUniforms();
-
+        setUniforms();
+        setLighting();
+        
         gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.innerCubeVertexBuffer);
         gl.vertexAttribPointer(program.vertPosition, 3, gl.FLOAT, false, 0, 0);
 

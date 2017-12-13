@@ -1,5 +1,11 @@
 var state = {
 	rubiksCube: null,
+	lighting: {
+		diffuse: [0.2, 0.2, 0.2, 1.0],
+		specular: [1.0, 1.0, 1.0, 1.0],
+		shininess: 1000.0,
+		ambient: [0.0, 0.0, 0.0, 1.0],
+	},
 	buffers : {
 		cubeVertexBuffer: null,
 		cubeNormalsBuffer: null,
@@ -19,7 +25,6 @@ var state = {
 		},
 		pressedKeys: {},
 	},
-	animation: {},
 	theta: {
 		x: 0,
 		y: 0,
@@ -27,9 +32,10 @@ var state = {
 	eye: [0, 0, -15],
 	center: [0, 0, 0],
 	up: [0, 1, 0],
-	objects: [],
 	FOV: -45,
 	stickerDepth: .96,
+	isRotating: false,
+	EPSILON: .001,
 };
 
 var gl;
@@ -38,7 +44,7 @@ var program;
 var viewMatrix;
 var projMatrix;
 var worldMatrix;
-var rotationMatrix;
+var rotationMatrix = mat4.create();;
 
 window.onload = function main(){
 	run();
@@ -54,7 +60,6 @@ function run(){
 	viewMatrix = mat4.create();
 	projMatrix = mat4.create();
 	worldMatrix = mat4.create();
-	rotationMatrix = mat4.create();
 
 	gl = init();
 	linkProgram(loadVertexShader(), loadFragShader());
@@ -69,7 +74,7 @@ function run(){
 		gl.frontFace(gl.CCW);
 		gl.cullFace(gl.BACK);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-		tick();
+		render();
 	}
 }
 
@@ -127,6 +132,10 @@ function linkProgram(vertexShader, fragmentShader){
 	gl.enableVertexAttribArray(program.vertNormal);
 
 	program.ambient = gl.getUniformLocation(program, 'ambient');
+	program.diffuse = gl.getUniformLocation(program, 'diffuse');
+	program.specular = gl.getUniformLocation(program, 'specular');
+	program.shininess = gl.getUniformLocation(program, 'shininess');
+
 
 	// make sure program was created correctly
 	if (!gl.getProgramParameter(program, gl.LINK_STATUS)){
@@ -134,81 +143,6 @@ function linkProgram(vertexShader, fragmentShader){
 	}
 
 	gl.viewport(0, 0, canvas.width, canvas.height);
-}
-
-function createBuffer(vertices, indices, program){
-	gl.useProgram(program);
-	var vertexBufferObject = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, vertexBufferObject);
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-	var itemSize = 3;
-	var numItems = vertices.length/itemSize;
-
-	var indexBufferObject = gl.createBuffer();
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferObject);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-
-	var positionAttribLocation = gl.getAttribLocation(program, 'vertPosition');
-	var colorAttribLocation = gl.getAttribLocation(program, 'vertColor')
-	gl.vertexAttribPointer(
-		positionAttribLocation,
-		itemSize,
-		gl.FLOAT,
-		gl.FALSE,
-		6 * Float32Array.BYTES_PER_ELEMENT,
-		0
-	);
-	
-	gl.vertexAttribPointer(
-		colorAttribLocation,
-		3,
-		gl.FLOAT,
-		gl.FALSE,
-		6 * Float32Array.BYTES_PER_ELEMENT,
-		3 * Float32Array.BYTES_PER_ELEMENT
-	);
-	gl.enableVertexAttribArray(positionAttribLocation);
-	gl.enableVertexAttribArray(colorAttribLocation);
-
-	gl.useProgram(program);
-
-	var matWorldUniformLocation = gl.getUniformLocation(program, 'mWorld');
-	var matViewUniformLocation = gl.getUniformLocation(program, 'mView');
-	var matProjUniformLocation = gl.getUniformLocation(program, 'mProj');
-
-	var worldMatrix = new Float32Array(16);
-	var viewMatrix = new Float32Array(16);
-	var projMatrix = new Float32Array(16);
-
-	mat4.identity(worldMatrix);
-	mat4.lookAt(viewMatrix, [state.app.eye.x, state.app.eye.y, state.app.eye.z], [0, 0, 0], [0, 1, 0]);
-	mat4.perspective(projMatrix, glMatrix.toRadian(45), canvas.width / canvas.height, 0.1, 1000);
-
-	gl.uniformMatrix4fv(matWorldUniformLocation, gl.FALSE, worldMatrix);
-	gl.uniformMatrix4fv(matViewUniformLocation, gl.FALSE, viewMatrix);
-	gl.uniformMatrix4fv(matProjUniformLocation, gl.FALSE, projMatrix);
-
-	var theta = 0;
-	var yRoatation = new Float32Array(16);
-	var xRoatation = new Float32Array(16);
-	var identityMatrix = new Float32Array(16);
-	mat4.identity(identityMatrix);
-	
-	var loop = function() {
-		updateState();
-		mat4.rotate(yRoatation, identityMatrix, state.theta.y/1000, [0, 1, 0]);
-		mat4.rotate(xRoatation, identityMatrix, state.theta.x/1000, [1, 0, 0]);
-		mat4.mul(worldMatrix, xRoatation, yRoatation);
-		
-		gl.uniformMatrix4fv(matWorldUniformLocation, gl.FALSE, worldMatrix);
-		
-		gl.clearColor(0.75, 0.85, 0.8, 1.0);;
-		gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
-		gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
-
-		requestAnimationFrame(loop);
-	};
-	requestAnimationFrame(loop);
 }
 
 function createCubeBuffer() {
@@ -253,27 +187,22 @@ function createInnerCubeBuffer() {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(getInnerCubeFaces()), gl.STATIC_DRAW);
 }
 
-function tick(){
-	requestAnimationFrame(tick);
+function render(){
+	requestAnimationFrame(render);
 	drawScene();
 }
 
 function drawScene(){
-	state.rubiksCube.drawToFrameBuffer();
+	if (state.isRotating){
+		state.rubiksCube.rotateChunk();
+	}
+
+	//state.rubiksCube.drawToFrameBuffer();
 	//state.rubiksCube.drawInnerCube();
 	state.rubiksCube.draw();
-
-	var yRoatation = new Float32Array(16);
-	var xRoatation = new Float32Array(16);
-	var identityMatrix = new Float32Array(16);
-	mat4.identity(identityMatrix);
-
-	mat4.rotate(yRoatation, identityMatrix, state.theta.y/1000, [0, 1, 0]);
-	mat4.rotate(xRoatation, identityMatrix, state.theta.x/1000, [1, 0, 0]);
-	mat4.mul(worldMatrix, xRoatation, yRoatation);
 }
 
-function setMatrixUniforms() {
+function setUniforms() {
 	var matWorldUniformLocation = gl.getUniformLocation(program, 'mWorld');
 	var matViewUniformLocation = gl.getUniformLocation(program, 'mView');
 	var matProjUniformLocation = gl.getUniformLocation(program, 'mProj');
@@ -281,6 +210,41 @@ function setMatrixUniforms() {
 	gl.uniformMatrix4fv(matWorldUniformLocation, gl.FALSE, worldMatrix);
 	gl.uniformMatrix4fv(matViewUniformLocation, gl.FALSE, viewMatrix);
 	gl.uniformMatrix4fv(matProjUniformLocation, gl.FALSE, projMatrix);
+}
+
+function setLighting(color=state.lighting.ambient){
+	gl.uniform4fv(program.ambient, color);
+	gl.uniform4fv(program.diffuse, state.lighting.diffuse);
+	gl.uniform4fv(program.specular, state.lighting.specular);
+	gl.uniform1f(program.shininess, state.lighting.shininess);
+}
+
+
+function mousemove(event){
+	if (state.ui.dragging){
+		x = event.pageX; // number of pixels from left edge of the document at which mouse was clicked
+		y = event.pageY;
+		
+		var dx = (x - state.theta.x) / 30;
+		var dy = (y - state.theta.y) / 30;
+		
+		var axis = [dy, -dx, 0];
+		var degrees = Math.sqrt(dx * dx + dy * dy);
+
+		var newRotationMatrix = mat4.create(); // identity matrix
+		mat4.rotate(newRotationMatrix, newRotationMatrix, degreesToRadians(degrees), axis);
+		mat4.multiply(rotationMatrix, newRotationMatrix, rotationMatrix); // update rotation matrix
+	}
+}
+
+function mousedown(event){
+	state.ui.dragging = true;
+	state.theta.x = event.pageX;
+	state.theta.y = event.pageY;
+}
+
+function mouseup(event){
+	state.ui.dragging = false;
 }
 
 function updateState(){
@@ -296,47 +260,17 @@ function updateState(){
 	}
 }
 
+function scrambleCube(){
+	state.rubiksCube.cycles = Math.floor(Math.random() * 100);
+	state.rubiksCube.scramble();
+}
+
 function keydown(event){
 	state.ui.pressedKeys[event.keyCode] = true;
 }
 
 function keyup(event){
 	state.ui.pressedKeys[event.keyCode] = false;
-}
-
-function mousedown(event){
-	var x = event.clientX;
-	var y = event.clientY;
-	var rect = event.target.getBoundingClientRect();
-
-	if (rect.left <= x && x < rect.right && rect.top <= y && y < rect.bottom){
-		state.ui.mouse.lastX = x;
-		state.ui.mouse.lastY = y;
-		state.ui.dragging = true;
-	}
-}
-
-function mouseup(event){
-	state.ui.dragging = false;
-}
-
-function mousemove(event){
-	var x = event.clientX;
-	var y = event.clientY;
-	if (state.ui.dragging){
-		var factor = 20;
-		var dx = factor * (x - state.ui.mouse.lastX);
-		var dy = factor * (y - state.ui.mouse.lastY);
-
-		state.theta.x += dy;
-		state.theta.y += dx;
-	}
-	state.ui.mouse.lastX = x;
-	state.ui.mouse.lastY = y;
-}
-
-function getAmbient(){
-	return [1.0, 1.0, 1.0, 1.0];
 }
 
 function degreesToRadians(degrees) {
