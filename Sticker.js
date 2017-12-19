@@ -1,4 +1,6 @@
 function Sticker(cube, color, rotate){
+    /* wrapper class for face color of each cube */
+    
     this.cube = cube;
     this.color = color;
     this.rotate = rotate;
@@ -16,8 +18,8 @@ function Sticker(cube, color, rotate){
         gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.stickerNormalsBuffer);
         gl.vertexAttribPointer(program.vertNormal, 3, gl.FLOAT, false, 0, 0);
 
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, state.buffers.stickerFacesBuffer);
-        gl.drawElements(gl.TRIANGLES, getStickerFaces().length, gl.UNSIGNED_SHORT, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, state.buffers.stickerIndicesBuffer);
+        gl.drawElements(gl.TRIANGLES, getStickerIndices().length, gl.UNSIGNED_SHORT, 0);
 
         mat4.copy(viewMatrix, mvMatrix);
     }

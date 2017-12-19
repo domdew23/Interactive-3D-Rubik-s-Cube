@@ -6,7 +6,6 @@
 		<script src="gl-matrix.js"></script>
 		<script src="verts.js"></script>
 		<script src="RubiksCube.js"></script>
-		<script src="InnerCube.js"></script>
 		<script src="Cube.js"></script>
 		<script src="Sticker.js"></script>
 		<script src="app.js"></script>
@@ -35,7 +34,7 @@
 				gl_Position = mProj * mView * mWorld * vec4(vertPosition, 1.0);
 
 				vec3 pos = -(mView * position).xyz;
-				vec3 lightPos = vec3(0, 0, -1);
+				vec3 lightPos = vec3(-1, 5, -1);
 				vec3 light = vec3(1, 1, 1);
 
 				surfaceLight = normalize(light - pos);
@@ -83,6 +82,8 @@
 		<canvas id="web_gl_canvas" width="800px" height="800px">
 			Your browser does not support HTML 5.
 		</canvas>
-		<input type="button" id=button value="Press to Scramble" onClick = "scrambleCube()"><br>
+		<input type="button" id=button value="Press to Scramble" onClick = "scrambleCube()">
+		<input type="button" id=button value="Press to do a Random Move" onClick = "randomMove()"><br>
+
 	</body>
 </html>
