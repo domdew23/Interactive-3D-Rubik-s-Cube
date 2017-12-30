@@ -32,6 +32,7 @@ var state = {
 	FOV: -45,
 	stickerDepth: .96,
 	isRotating: false,
+	constantRotate: false,
 	EPSILON: .001,
 };
 
@@ -41,7 +42,10 @@ var program;
 var viewMatrix;
 var projMatrix;
 var worldMatrix;
-var rotationMatrix = mat4.create();;
+var rotationMatrix = mat4.create();
+var newTime = 0;
+var oldTime = 0;
+var theta = 0;
 
 window.onload = function main(){
 	run();
@@ -181,7 +185,25 @@ function update(){
 	if (state.isRotating){
 		state.rubiksCube.rotateChunk();
 	}
+	
+	if (state.constantRotate){
+		myRotate();
+	}
 	state.rubiksCube.draw();
+}
+
+function myRotate(){
+		oldTime = newTime;
+		newTime = performance.now();
+		delta = newTime - oldTime;
+	if (state.constantRotate){
+		theta = (delta / 1000 / 6 * 2 * Math.PI);
+		console.log(theta);
+	}
+
+	var newRotationMatrix = mat4.create(); // identity matrix
+	mat4.rotate(newRotationMatrix, newRotationMatrix, theta, [0, -1, 0]);
+	mat4.multiply(rotationMatrix, newRotationMatrix, rotationMatrix); // update rotation matrix	
 }
 
 function setUniforms() {
@@ -241,6 +263,14 @@ function randomMove(){
 	if (!state.isRotating){
 		state.rubiksCube.cycles = 1;
 		state.rubiksCube.scramble();
+	}
+}
+
+function changeRotation(){
+	if (state.constantRotate){
+		state.constantRotate = false;
+	} else {
+		state.constantRotate = true;
 	}
 }
 
