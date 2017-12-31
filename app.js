@@ -198,7 +198,6 @@ function myRotate(){
 		delta = newTime - oldTime;
 	if (state.constantRotate){
 		theta = (delta / 1000 / 6 * 2 * Math.PI);
-		console.log(theta);
 	}
 
 	var newRotationMatrix = mat4.create(); // identity matrix
